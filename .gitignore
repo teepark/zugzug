@@ -1,0 +1,12 @@
+*.pyc
+*.pyo
+.*.swp
+.*.swo
+zugzug.egg-info/*
+build/*
+docs/build/*
+dist/*
+html/*
+
+.coverage
+coverage_annotated/*

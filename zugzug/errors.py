@@ -14,3 +14,6 @@ class WorkerException(Exception):
 
 class WorkerDied(Exception):
     pass
+
+class ProducerException(Exception):
+    pass

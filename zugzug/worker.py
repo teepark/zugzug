@@ -16,6 +16,10 @@ green_os = greenhouse.patched('os')
 
 CMD_JOB = 1
 CMD_CLOSE = 2
+CMD_STREAM_START = 3
+CMD_STREAM_ELEM = 4
+CMD_STREAM_END = 5
+
 RC_GOOD = 1
 RC_BAD = 2
 
@@ -28,6 +32,7 @@ class Worker(object):
         self.writepipe = None
         self._inflight = None
         self._childpipes = None
+        self._pusher = None
 
     def start(self):
         read_req, write_req = os.pipe()
@@ -83,7 +88,14 @@ class Worker(object):
 
     def submit(self, args, kwargs):
         self._inflight = futures.Future()
-        send_req(self.writepipe, CMD_JOB, args, kwargs)
+        if args and (
+                hasattr(args[0], '__iter__') and
+                not hasattr(args[0], '__len__')):
+            send_req(self.writepipe, CMD_STREAM_START, args[1:], kwargs)
+            self._pusher = greenhouse.greenlet(self._push_down(args[0]))
+            greenhouse.schedule(self._pusher)
+        else:
+            send_req(self.writepipe, CMD_JOB, args, kwargs)
         return self._inflight
 
     def recover(self):
@@ -110,6 +122,17 @@ class Worker(object):
         os.close(self.writepipe)
         os.close(self._childpipes[0])
         os.close(self._childpipes[1])
+
+    def _push_down(self, gen):
+        failed = False
+        try:
+            for obj in gen:
+                send_req(self.writepipe, CMD_STREAM_ELEM, (obj,), {})
+        except Exception:
+            failed = True
+        finally:
+            send_req(self.writepipe, CMD_STREAM_END, (failed,), {})
+            self._pusher = None
 
 
 def _greenify(pipefd):
